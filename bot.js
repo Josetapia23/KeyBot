@@ -184,37 +184,58 @@ class KeyDropBot {
             // Esperar a que cargue la página completamente
             await this.page.waitForTimeout(3000);
 
-            // Buscar el sorteo Amateur
-            // Nota: Estos selectores son aproximados y deberán ajustarse según la estructura real
-            const amateurGiveaway = await this.page.locator('text=Amateur').first();
+            // Buscar el sorteo Amateur usando un selector más específico
+            // Buscamos la card completa que contiene "AMATEUR"
+            const amateurCard = this.page.locator('a[data-testid="btn-single-card-giveaway-join"]').filter({ has: this.page.locator('text=AMATEUR') });
 
-            if (await amateurGiveaway.count() > 0) {
-                log('✅ Sorteo Amateur encontrado', 'green');
+            // Si no encuentra con ese selector, intentar con el link que contiene Amateur
+            const amateurLink = this.page.locator('a[href*="/giveaways/"]').filter({ hasText: 'AMATEUR' }).first();
 
-                // Hacer clic en el sorteo Amateur
-                await amateurGiveaway.click();
+            let foundCard = false;
+
+            // Intentar con el primer selector
+            if (await amateurCard.count() > 0) {
+                log('✅ Sorteo Amateur encontrado (método 1)', 'green');
+                // Hacer clic directamente en el enlace/botón con force para ignorar interceptores
+                await amateurCard.first().click({ force: true });
+                foundCard = true;
+            } else if (await amateurLink.count() > 0) {
+                log('✅ Sorteo Amateur encontrado (método 2)', 'green');
+                await amateurLink.click({ force: true });
+                foundCard = true;
+            } else {
+                log('❌ No se encontró el sorteo Amateur', 'red');
+                return;
+            }
+
+            if (foundCard) {
+                // Esperar a que cargue la nueva página
+                await this.page.waitForLoadState('domcontentloaded');
                 await this.page.waitForTimeout(2000);
 
-                // Buscar y hacer clic en el botón de "Unirse al sorteo"
-                // Ajusta el selector según el texto real del botón
-                const joinButton = this.page.locator('button:has-text("Unirse"), button:has-text("Join"), button:has-text("Participar")').first();
+                // Verificar que estamos en la página correcta
+                const currentUrl = this.page.url();
+                log(`📍 Navegado a: ${currentUrl}`, 'blue');
+
+                // Buscar el botón de "Unirse al sorteo" usando el data-testid
+                const joinButton = this.page.locator('[data-testid="btn-single-card-giveaway-join"]').first();
 
                 if (await joinButton.count() > 0) {
-                    await joinButton.click();
+                    log('✅ Botón "Unirse al sorteo" encontrado', 'green');
+                    await joinButton.click({ force: true });
                     this.participationCount++;
                     log(`🎉 ¡Participación exitosa! Total: ${this.participationCount}`, 'green');
 
-                    await this.page.waitForTimeout(1000);
+                    await this.page.waitForTimeout(2000);
 
-                    // Volver atrás
-                    await this.page.goBack();
-                    log('⬅️  Regresando a la lista de sorteos', 'blue');
+                    // Volver a la lista de sorteos
+                    await this.page.goto(CONFIG.GIVEAWAY_URL);
+                    log('⬅️  Regresado a la lista de sorteos', 'blue');
                 } else {
-                    log('⚠️  No se encontró el botón de participar (puede que ya hayas participado)', 'yellow');
-                    await this.page.goBack();
+                    log('⚠️  No se encontró el botón de participar', 'yellow');
+                    // Volver a la lista
+                    await this.page.goto(CONFIG.GIVEAWAY_URL);
                 }
-            } else {
-                log('❌ No se encontró el sorteo Amateur', 'red');
             }
 
         } catch (error) {
