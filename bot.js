@@ -42,6 +42,7 @@ class KeyDropBot {
 
         if (CONFIG.USE_BRAVE) {
             log('🦁 Usando tu navegador Brave con tu sesión existente...', 'cyan');
+            log('⚠️  Asegúrate de cerrar completamente Brave antes de continuar', 'yellow');
 
             // Verificar que exista el ejecutable de Brave
             if (!fs.existsSync(CONFIG.BRAVE_PATH)) {
@@ -57,21 +58,29 @@ class KeyDropBot {
                 process.exit(1);
             }
 
-            // Usar el contexto persistente de Brave (con tu perfil y sesión)
-            this.context = await chromium.launchPersistentContext(CONFIG.BRAVE_USER_DATA, {
-                headless: false, // Brave no soporta headless con perfil de usuario
-                executablePath: CONFIG.BRAVE_PATH,
-                viewport: { width: 1920, height: 1080 },
-                args: [
-                    '--disable-blink-features=AutomationControlled',
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox'
-                ]
-            });
+            try {
+                // Usar el contexto persistente de Brave (con tu perfil y sesión)
+                this.context = await chromium.launchPersistentContext(CONFIG.BRAVE_USER_DATA, {
+                    headless: false, // Brave no soporta headless con perfil de usuario
+                    executablePath: CONFIG.BRAVE_PATH,
+                    viewport: { width: 1920, height: 1080 },
+                    args: [
+                        '--disable-blink-features=AutomationControlled',
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox'
+                    ]
+                });
 
-            this.page = this.context.pages()[0] || await this.context.newPage();
-            log('✅ Brave iniciado con tu perfil', 'green');
-            log('🔑 Usando tu sesión existente de KeyDrop', 'green');
+                this.page = this.context.pages()[0] || await this.context.newPage();
+                log('✅ Brave iniciado con tu perfil', 'green');
+                log('🔑 Usando tu sesión existente de KeyDrop', 'green');
+            } catch (error) {
+                log('❌ Error al abrir Brave. Posibles causas:', 'red');
+                log('   1. Brave ya está abierto - CIÉRRALO completamente', 'yellow');
+                log('   2. Otra instancia del bot está corriendo', 'yellow');
+                log('   3. El perfil está bloqueado', 'yellow');
+                throw error;
+            }
 
         } else {
             // Método original con Chromium de Playwright
@@ -111,12 +120,12 @@ class KeyDropBot {
         log('🔍 Verificando estado de sesión...', 'yellow');
 
         await this.page.goto(CONFIG.GIVEAWAY_URL, {
-            waitUntil: 'networkidle',
-            timeout: 60000
+            waitUntil: 'domcontentloaded',
+            timeout: 30000
         });
 
-        // Esperar un poco para que cargue la página
-        await this.page.waitForTimeout(3000);
+        // Esperar un poco para que cargue la página completamente
+        await this.page.waitForTimeout(5000);
 
         // Verificar si hay un botón de login o si ya está logueado
         // Ajusta estos selectores según la estructura real de KeyDrop
@@ -158,12 +167,12 @@ class KeyDropBot {
 
             // Navegar a la página de sorteos
             await this.page.goto(CONFIG.GIVEAWAY_URL, {
-                waitUntil: 'networkidle',
-                timeout: 60000
+                waitUntil: 'domcontentloaded',
+                timeout: 30000
             });
 
-            // Esperar a que cargue la página
-            await this.page.waitForTimeout(2000);
+            // Esperar a que cargue la página completamente
+            await this.page.waitForTimeout(3000);
 
             // Buscar el sorteo Amateur
             // Nota: Estos selectores son aproximados y deberán ajustarse según la estructura real
