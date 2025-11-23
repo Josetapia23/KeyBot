@@ -8,6 +8,9 @@ const CONFIG = {
     GIVEAWAY_URL: process.env.GIVEAWAY_URL || 'https://keydrop.com/es/giveaways/list',
     WAIT_TIME: parseInt(process.env.WAIT_TIME) || 120000, // 2 minutos por defecto
     HEADLESS: process.env.HEADLESS !== 'false', // true por defecto
+    USE_BRAVE: process.env.USE_BRAVE === 'true', // Usar Brave en lugar de Chromium
+    BRAVE_PATH: process.env.BRAVE_PATH || 'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+    BRAVE_USER_DATA: process.env.BRAVE_USER_DATA || path.join(process.env.LOCALAPPDATA || '', 'BraveSoftware\\Brave-Browser\\User Data'),
     SESSION_DIR: path.join(__dirname, 'session')
 };
 
@@ -37,33 +40,71 @@ class KeyDropBot {
     async init() {
         log('🚀 Iniciando KeyDrop Bot...', 'cyan');
 
-        // Crear directorio de sesión si no existe
-        if (!fs.existsSync(CONFIG.SESSION_DIR)) {
-            fs.mkdirSync(CONFIG.SESSION_DIR, { recursive: true });
-            log('📁 Directorio de sesión creado', 'yellow');
+        if (CONFIG.USE_BRAVE) {
+            log('🦁 Usando tu navegador Brave con tu sesión existente...', 'cyan');
+
+            // Verificar que exista el ejecutable de Brave
+            if (!fs.existsSync(CONFIG.BRAVE_PATH)) {
+                log(`❌ No se encuentra Brave en: ${CONFIG.BRAVE_PATH}`, 'red');
+                log('💡 Edita el archivo .env y corrige la ruta BRAVE_PATH', 'yellow');
+                process.exit(1);
+            }
+
+            // Verificar que exista el directorio de perfil
+            if (!fs.existsSync(CONFIG.BRAVE_USER_DATA)) {
+                log(`❌ No se encuentra el perfil de Brave en: ${CONFIG.BRAVE_USER_DATA}`, 'red');
+                log('💡 Edita el archivo .env y corrige la ruta BRAVE_USER_DATA', 'yellow');
+                process.exit(1);
+            }
+
+            // Usar el contexto persistente de Brave (con tu perfil y sesión)
+            this.context = await chromium.launchPersistentContext(CONFIG.BRAVE_USER_DATA, {
+                headless: false, // Brave no soporta headless con perfil de usuario
+                executablePath: CONFIG.BRAVE_PATH,
+                viewport: { width: 1920, height: 1080 },
+                args: [
+                    '--disable-blink-features=AutomationControlled',
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox'
+                ]
+            });
+
+            this.page = this.context.pages()[0] || await this.context.newPage();
+            log('✅ Brave iniciado con tu perfil', 'green');
+            log('🔑 Usando tu sesión existente de KeyDrop', 'green');
+
+        } else {
+            // Método original con Chromium de Playwright
+            log('🌐 Usando Chromium de Playwright...', 'cyan');
+
+            // Crear directorio de sesión si no existe
+            if (!fs.existsSync(CONFIG.SESSION_DIR)) {
+                fs.mkdirSync(CONFIG.SESSION_DIR, { recursive: true });
+                log('📁 Directorio de sesión creado', 'yellow');
+            }
+
+            // Lanzar navegador con opciones anti-detección
+            this.browser = await chromium.launch({
+                headless: CONFIG.HEADLESS,
+                args: [
+                    '--disable-blink-features=AutomationControlled',
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox'
+                ]
+            });
+
+            // Crear contexto con sesión persistente
+            this.context = await this.browser.newContext({
+                storageState: fs.existsSync(path.join(CONFIG.SESSION_DIR, 'state.json'))
+                    ? path.join(CONFIG.SESSION_DIR, 'state.json')
+                    : undefined,
+                viewport: { width: 1920, height: 1080 },
+                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            });
+
+            this.page = await this.context.newPage();
+            log('✅ Navegador iniciado correctamente', 'green');
         }
-
-        // Lanzar navegador con opciones anti-detección
-        this.browser = await chromium.launch({
-            headless: CONFIG.HEADLESS,
-            args: [
-                '--disable-blink-features=AutomationControlled',
-                '--no-sandbox',
-                '--disable-setuid-sandbox'
-            ]
-        });
-
-        // Crear contexto con sesión persistente
-        this.context = await this.browser.newContext({
-            storageState: fs.existsSync(path.join(CONFIG.SESSION_DIR, 'state.json'))
-                ? path.join(CONFIG.SESSION_DIR, 'state.json')
-                : undefined,
-            viewport: { width: 1920, height: 1080 },
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        });
-
-        this.page = await this.context.newPage();
-        log('✅ Navegador iniciado correctamente', 'green');
     }
 
     async checkLogin() {
@@ -191,8 +232,16 @@ class KeyDropBot {
 
     async cleanup() {
         log('🧹 Cerrando navegador...', 'yellow');
-        if (this.browser) {
-            await this.browser.close();
+        if (CONFIG.USE_BRAVE) {
+            // En modo Brave, cerramos el contexto
+            if (this.context) {
+                await this.context.close();
+            }
+        } else {
+            // En modo Chromium, cerramos el browser
+            if (this.browser) {
+                await this.browser.close();
+            }
         }
         log('👋 Bot detenido', 'cyan');
     }
