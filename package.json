@@ -1,0 +1,24 @@
+{
+  "name": "keydrop-bot",
+  "version": "1.0.0",
+  "description": "Bot de automatización para participar en sorteos de KeyDrop cada 2 minutos",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "test": "node bot.js --headless=false"
+  },
+  "keywords": [
+    "keydrop",
+    "automation",
+    "bot",
+    "giveaway"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "dotenv": "^16.3.1"
+  }
+}
