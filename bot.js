@@ -184,43 +184,46 @@ class KeyDropBot {
             // Esperar a que cargue la página completamente
             await this.page.waitForTimeout(3000);
 
-            // Debug: Ver qué elementos hay disponibles
-            const allCards = await this.page.locator('a[data-testid="btn-single-card-giveaway-join"]').count();
-            const allLinks = await this.page.locator('a[href*="/giveaways/"]').count();
-            log(`🔍 Debug: Encontrados ${allCards} cards con data-testid y ${allLinks} links de sorteos`, 'blue');
-
-            // Buscar el sorteo Amateur usando un selector más específico
-            // Intentar con diferentes variantes de texto (mayúsculas/minúsculas)
-            const amateurCard = this.page.locator('a[data-testid="btn-single-card-giveaway-join"]').filter({ has: this.page.locator('text=/AMATEUR/i') });
-
-            // Si no encuentra con ese selector, intentar con el link que contiene Amateur (case insensitive)
-            const amateurLink = this.page.locator('a[href*="/giveaways/"]').filter({ hasText: /amateur/i }).first();
-
+            // Enfoque simple: Buscar el texto "AMATEUR" y hacer clic en el botón de unirse más cercano
             let foundCard = false;
 
-            // Intentar con el primer selector
-            if (await amateurCard.count() > 0) {
-                log('✅ Sorteo Amateur encontrado (método 1)', 'green');
-                // Hacer clic directamente en el enlace/botón con force para ignorar interceptores
-                await amateurCard.first().click({ force: true });
-                foundCard = true;
-            } else if (await amateurLink.count() > 0) {
-                log('✅ Sorteo Amateur encontrado (método 2)', 'green');
-                await amateurLink.click({ force: true });
-                foundCard = true;
-            } else {
-                log('❌ No se encontró el sorteo Amateur', 'red');
+            try {
+                // Primero verificar si existe el texto "AMATEUR" en la página
+                const amateurExists = await this.page.getByText(/amateur/i).count();
+                log(`🔍 Elementos con "Amateur" encontrados: ${amateurExists}`, 'blue');
 
-                // Debug: Tomar screenshot para ver qué hay en la página
-                try {
-                    const screenshotPath = path.join(__dirname, 'debug_screenshot.png');
-                    await this.page.screenshot({ path: screenshotPath });
-                    log(`📸 Screenshot guardado en: ${screenshotPath}`, 'yellow');
-                } catch (e) {
-                    log('⚠️  No se pudo guardar screenshot', 'yellow');
+                if (amateurExists > 0) {
+                    // Buscar la card completa que contiene "AMATEUR GIVEAWAY"
+                    // Usamos un selector que busca el contenedor y luego el botón dentro de él
+
+                    // Método 1: Hacer clic directamente en el texto "AMATEUR GIVEAWAY"
+                    const amateurGiveaway = this.page.getByText(/amateur\s*giveaway/i).first();
+
+                    if (await amateurGiveaway.count() > 0) {
+                        log('✅ Encontrado "AMATEUR GIVEAWAY"', 'green');
+                        // Hacer clic en el texto para ir a la página del sorteo
+                        await amateurGiveaway.click({ force: true });
+                        foundCard = true;
+                    }
                 }
 
-                return false; // Retornar false cuando no encuentra el sorteo
+                if (!foundCard) {
+                    log('❌ No se encontró el sorteo Amateur', 'red');
+
+                    // Debug: Tomar screenshot para ver qué hay en la página
+                    try {
+                        const screenshotPath = path.join(__dirname, 'debug_screenshot.png');
+                        await this.page.screenshot({ path: screenshotPath });
+                        log(`📸 Screenshot guardado en: ${screenshotPath}`, 'yellow');
+                    } catch (e) {
+                        log('⚠️  No se pudo guardar screenshot', 'yellow');
+                    }
+
+                    return false; // Retornar false cuando no encuentra el sorteo
+                }
+            } catch (error) {
+                log(`❌ Error al buscar sorteo: ${error.message}`, 'red');
+                return false;
             }
 
             if (foundCard) {
