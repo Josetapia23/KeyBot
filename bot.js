@@ -200,8 +200,7 @@ class KeyDropBot {
                     if (await amateurText.count() > 0) {
                         log('✅ Encontrado "AMATEUR GIVEAWAY"', 'green');
 
-                        // Intentar obtener el enlace padre o cercano
-                        // Método 1: Buscar en el DOM el enlace que rodea este texto
+                        // Intentar obtener el enlace correcto del sorteo
                         amateurGiveawayUrl = await this.page.evaluate(() => {
                             // Buscar todos los elementos que contengan "AMATEUR GIVEAWAY"
                             const elements = Array.from(document.querySelectorAll('*'));
@@ -211,19 +210,42 @@ class KeyDropBot {
                             });
 
                             if (amateurElement) {
-                                // Buscar el enlace más cercano (padre o ancestro)
+                                // Buscar el contenedor de la card (probablemente un div padre)
+                                let cardContainer = amateurElement;
+
+                                // Subir hasta encontrar un contenedor que tenga enlaces
+                                for (let i = 0; i < 10; i++) {
+                                    if (!cardContainer.parentElement) break;
+                                    cardContainer = cardContainer.parentElement;
+
+                                    // Buscar todos los enlaces dentro de este contenedor
+                                    const links = Array.from(cardContainer.querySelectorAll('a[href*="/giveaways/"]'));
+
+                                    // Filtrar enlaces que NO sean /giveaways/list
+                                    const validLinks = links.filter(link => {
+                                        const href = link.href || '';
+                                        return !href.endsWith('/giveaways/list') &&
+                                               !href.endsWith('/giveaways') &&
+                                               href.includes('/giveaways/');
+                                    });
+
+                                    // Si encontramos un enlace válido, usarlo
+                                    if (validLinks.length > 0) {
+                                        return validLinks[0].href;
+                                    }
+                                }
+
+                                // Si no encontró nada válido, buscar el enlace padre directo
                                 let current = amateurElement;
                                 while (current && current !== document.body) {
                                     if (current.tagName === 'A' && current.href) {
-                                        return current.href;
+                                        const href = current.href;
+                                        // Solo retornar si NO es /giveaways/list
+                                        if (!href.endsWith('/giveaways/list') && !href.endsWith('/giveaways')) {
+                                            return href;
+                                        }
                                     }
                                     current = current.parentElement;
-                                }
-
-                                // Si no encontró como padre, buscar enlace dentro del mismo elemento
-                                const link = amateurElement.querySelector('a[href*="/giveaways/"]');
-                                if (link) {
-                                    return link.href;
                                 }
                             }
                             return null;
