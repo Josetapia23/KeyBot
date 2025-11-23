@@ -189,92 +189,42 @@ class KeyDropBot {
             let amateurGiveawayUrl = null;
 
             try {
-                // Método que funcionaba: Buscar el texto "AMATEUR"
-                const amateurExists = await this.page.getByText(/amateur/i).count();
-                log(`🔍 Elementos con "Amateur" encontrados: ${amateurExists}`, 'blue');
+                // Buscar directamente el enlace que contiene "AMATEUR GIVEAWAY"
+                const amateurLink = await this.page.evaluate(() => {
+                    // Buscar todos los enlaces en la página
+                    const links = Array.from(document.querySelectorAll('a[href*="/giveaways/"]'));
 
-                if (amateurExists > 0) {
-                    // Encontrar el texto "AMATEUR GIVEAWAY"
-                    const amateurText = this.page.getByText(/amateur\s*giveaway/i).first();
+                    // Encontrar el enlace que contiene "AMATEUR" en su texto
+                    const amateurLink = links.find(link => {
+                        const text = link.textContent || '';
+                        const href = link.href || '';
+                        return text.toUpperCase().includes('AMATEUR') &&
+                               !href.endsWith('/giveaways/list') &&
+                               !href.endsWith('/giveaways');
+                    });
 
-                    if (await amateurText.count() > 0) {
-                        log('✅ Encontrado "AMATEUR GIVEAWAY"', 'green');
-
-                        // Intentar obtener el enlace correcto del sorteo
-                        amateurGiveawayUrl = await this.page.evaluate(() => {
-                            // Buscar todos los elementos que contengan "AMATEUR GIVEAWAY"
-                            const elements = Array.from(document.querySelectorAll('*'));
-                            const amateurElement = elements.find(el => {
-                                const text = el.textContent || '';
-                                return text.includes('AMATEUR') && text.includes('GIVEAWAY') && el.children.length < 10;
-                            });
-
-                            if (amateurElement) {
-                                // Buscar el contenedor de la card (probablemente un div padre)
-                                let cardContainer = amateurElement;
-
-                                // Subir hasta encontrar un contenedor que tenga enlaces
-                                for (let i = 0; i < 10; i++) {
-                                    if (!cardContainer.parentElement) break;
-                                    cardContainer = cardContainer.parentElement;
-
-                                    // Buscar todos los enlaces dentro de este contenedor
-                                    const links = Array.from(cardContainer.querySelectorAll('a[href*="/giveaways/"]'));
-
-                                    // Filtrar enlaces que NO sean /giveaways/list
-                                    const validLinks = links.filter(link => {
-                                        const href = link.href || '';
-                                        return !href.endsWith('/giveaways/list') &&
-                                               !href.endsWith('/giveaways') &&
-                                               href.includes('/giveaways/');
-                                    });
-
-                                    // Si encontramos un enlace válido, usarlo
-                                    if (validLinks.length > 0) {
-                                        return validLinks[0].href;
-                                    }
-                                }
-
-                                // Si no encontró nada válido, buscar el enlace padre directo
-                                let current = amateurElement;
-                                while (current && current !== document.body) {
-                                    if (current.tagName === 'A' && current.href) {
-                                        const href = current.href;
-                                        // Solo retornar si NO es /giveaways/list
-                                        if (!href.endsWith('/giveaways/list') && !href.endsWith('/giveaways')) {
-                                            return href;
-                                        }
-                                    }
-                                    current = current.parentElement;
-                                }
-                            }
-                            return null;
-                        });
-
-                        if (amateurGiveawayUrl) {
-                            log(`🔗 URL del sorteo Amateur: ${amateurGiveawayUrl}`, 'green');
-                            // Navegar directamente a la URL
-                            await this.page.goto(amateurGiveawayUrl, {
-                                waitUntil: 'domcontentloaded',
-                                timeout: 30000
-                            });
-                            foundCard = true;
-                        } else {
-                            log('⚠️  No se pudo obtener la URL del sorteo', 'yellow');
-                            // Intentar hacer clic en el texto directamente (método anterior)
-                            await amateurText.click({ force: true });
-                            await this.page.waitForTimeout(2000);
-
-                            // Verificar si la URL cambió
-                            const currentUrl = this.page.url();
-                            if (!currentUrl.includes('/giveaways/list')) {
-                                log(`🔗 Navegado a: ${currentUrl}`, 'green');
-                                foundCard = true;
-                            } else {
-                                log('⚠️  El clic no navegó a la página del sorteo', 'yellow');
-                            }
-                        }
+                    if (amateurLink) {
+                        return {
+                            url: amateurLink.href,
+                            text: amateurLink.textContent.trim()
+                        };
                     }
+                    return null;
+                });
+
+                if (amateurLink) {
+                    log(`✅ Encontrado sorteo: "${amateurLink.text}"`, 'green');
+                    log(`🔗 URL: ${amateurLink.url}`, 'blue');
+
+                    // Navegar directamente a la URL del sorteo
+                    await this.page.goto(amateurLink.url, {
+                        waitUntil: 'domcontentloaded',
+                        timeout: 30000
+                    });
+
+                    foundCard = true;
+                } else {
+                    log('❌ No se encontró enlace al sorteo Amateur', 'yellow');
                 }
 
                 if (!foundCard) {
