@@ -127,13 +127,21 @@ class KeyDropBot {
         // Esperar un poco para que cargue la página completamente
         await this.page.waitForTimeout(5000);
 
+        if (CONFIG.USE_BRAVE) {
+            // Si usa Brave con su perfil, asumimos que ya está logueado
+            log('✅ Usando perfil de Brave - sesión activa', 'green');
+            return;
+        }
+
         // Verificar si hay un botón de login o si ya está logueado
-        // Ajusta estos selectores según la estructura real de KeyDrop
         const isLoggedIn = await this.page.evaluate(() => {
-            // Verificar si hay elementos que indiquen que está logueado
-            // Por ejemplo, avatar de usuario, nombre de usuario, etc.
-            return !document.querySelector('a[href*="login"]') &&
-                   !document.querySelector('button:has-text("Login")');
+            // Buscar indicadores comunes de login
+            const loginLink = document.querySelector('a[href*="login"]');
+            const loginButton = document.querySelector('button[class*="login"]');
+            const signInButton = document.querySelector('button[class*="sign-in"]');
+
+            // Si no encuentra ningún botón de login, asume que está logueado
+            return !loginLink && !loginButton && !signInButton;
         });
 
         if (!isLoggedIn) {
@@ -156,9 +164,11 @@ class KeyDropBot {
             log('✅ Sesión activa detectada', 'green');
         }
 
-        // Guardar estado de la sesión
-        await this.context.storageState({ path: path.join(CONFIG.SESSION_DIR, 'state.json') });
-        log('💾 Sesión guardada', 'green');
+        // Guardar estado de la sesión (solo si no usa Brave)
+        if (!CONFIG.USE_BRAVE) {
+            await this.context.storageState({ path: path.join(CONFIG.SESSION_DIR, 'state.json') });
+            log('💾 Sesión guardada', 'green');
+        }
     }
 
     async participateInGiveaway() {
