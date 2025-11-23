@@ -184,49 +184,73 @@ class KeyDropBot {
             // Esperar a que cargue la página completamente
             await this.page.waitForTimeout(3000);
 
-            // Buscar el enlace del sorteo Amateur
+            // Buscar el sorteo Amateur
             let foundCard = false;
+            let amateurGiveawayUrl = null;
 
             try {
-                // Buscar el enlace que contiene el texto "AMATEUR"
-                // Intentar varios selectores para encontrar el link correcto
-                log('🔍 Buscando enlace del sorteo Amateur...', 'blue');
+                // Método que funcionaba: Buscar el texto "AMATEUR"
+                const amateurExists = await this.page.getByText(/amateur/i).count();
+                log(`🔍 Elementos con "Amateur" encontrados: ${amateurExists}`, 'blue');
 
-                // Método 1: Buscar enlace con texto que contenga "AMATEUR"
-                const amateurLink = this.page.locator('a:has-text("AMATEUR")').first();
+                if (amateurExists > 0) {
+                    // Encontrar el texto "AMATEUR GIVEAWAY"
+                    const amateurText = this.page.getByText(/amateur\s*giveaway/i).first();
 
-                if (await amateurLink.count() > 0) {
-                    log('✅ Encontrado enlace de sorteo "AMATEUR"', 'green');
+                    if (await amateurText.count() > 0) {
+                        log('✅ Encontrado "AMATEUR GIVEAWAY"', 'green');
 
-                    // Obtener la URL del enlace antes de hacer clic
-                    const href = await amateurLink.getAttribute('href');
-                    log(`🔗 URL del sorteo: ${href}`, 'blue');
+                        // Intentar obtener el enlace padre o cercano
+                        // Método 1: Buscar en el DOM el enlace que rodea este texto
+                        amateurGiveawayUrl = await this.page.evaluate(() => {
+                            // Buscar todos los elementos que contengan "AMATEUR GIVEAWAY"
+                            const elements = Array.from(document.querySelectorAll('*'));
+                            const amateurElement = elements.find(el => {
+                                const text = el.textContent || '';
+                                return text.includes('AMATEUR') && text.includes('GIVEAWAY') && el.children.length < 10;
+                            });
 
-                    // Hacer clic en el enlace
-                    await amateurLink.click({ force: true });
-                    foundCard = true;
+                            if (amateurElement) {
+                                // Buscar el enlace más cercano (padre o ancestro)
+                                let current = amateurElement;
+                                while (current && current !== document.body) {
+                                    if (current.tagName === 'A' && current.href) {
+                                        return current.href;
+                                    }
+                                    current = current.parentElement;
+                                }
 
-                    // Esperar a que navegue
-                    await this.page.waitForLoadState('domcontentloaded');
-                } else {
-                    log('⚠️  No se encontró enlace con texto "AMATEUR"', 'yellow');
+                                // Si no encontró como padre, buscar enlace dentro del mismo elemento
+                                const link = amateurElement.querySelector('a[href*="/giveaways/"]');
+                                if (link) {
+                                    return link.href;
+                                }
+                            }
+                            return null;
+                        });
 
-                    // Método 2: Buscar por atributo href que contenga un ID específico
-                    // o cualquier enlace en la sección de giveaways
-                    const allGiveawayLinks = await this.page.locator('a[href*="/giveaways/"]').all();
-                    log(`🔍 Enlaces de giveaways encontrados: ${allGiveawayLinks.length}`, 'blue');
-
-                    // Buscar el que contenga "AMATEUR" en su texto
-                    for (const link of allGiveawayLinks) {
-                        const text = await link.textContent();
-                        if (text && text.toUpperCase().includes('AMATEUR')) {
-                            log(`✅ Encontrado enlace Amateur: "${text.trim()}"`, 'green');
-                            const href = await link.getAttribute('href');
-                            log(`🔗 URL del sorteo: ${href}`, 'blue');
-                            await link.click({ force: true });
+                        if (amateurGiveawayUrl) {
+                            log(`🔗 URL del sorteo Amateur: ${amateurGiveawayUrl}`, 'green');
+                            // Navegar directamente a la URL
+                            await this.page.goto(amateurGiveawayUrl, {
+                                waitUntil: 'domcontentloaded',
+                                timeout: 30000
+                            });
                             foundCard = true;
-                            await this.page.waitForLoadState('domcontentloaded');
-                            break;
+                        } else {
+                            log('⚠️  No se pudo obtener la URL del sorteo', 'yellow');
+                            // Intentar hacer clic en el texto directamente (método anterior)
+                            await amateurText.click({ force: true });
+                            await this.page.waitForTimeout(2000);
+
+                            // Verificar si la URL cambió
+                            const currentUrl = this.page.url();
+                            if (!currentUrl.includes('/giveaways/list')) {
+                                log(`🔗 Navegado a: ${currentUrl}`, 'green');
+                                foundCard = true;
+                            } else {
+                                log('⚠️  El clic no navegó a la página del sorteo', 'yellow');
+                            }
                         }
                     }
                 }
