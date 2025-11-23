@@ -205,7 +205,7 @@ class KeyDropBot {
                 foundCard = true;
             } else {
                 log('❌ No se encontró el sorteo Amateur', 'red');
-                return;
+                return false; // Retornar false cuando no encuentra el sorteo
             }
 
             if (foundCard) {
@@ -231,12 +231,17 @@ class KeyDropBot {
                     // Volver a la lista de sorteos
                     await this.page.goto(CONFIG.GIVEAWAY_URL);
                     log('⬅️  Regresado a la lista de sorteos', 'blue');
+
+                    return true; // Retornar true cuando se une exitosamente
                 } else {
                     log('⚠️  No se encontró el botón de participar', 'yellow');
                     // Volver a la lista
                     await this.page.goto(CONFIG.GIVEAWAY_URL);
+                    return false; // Retornar false cuando no encuentra el botón
                 }
             }
+
+            return false; // Por defecto retornar false
 
         } catch (error) {
             log(`❌ Error al participar: ${error.message}`, 'red');
@@ -246,6 +251,7 @@ class KeyDropBot {
             } catch (e) {
                 log('❌ Error al volver a la página principal', 'red');
             }
+            return false; // Retornar false en caso de error
         }
     }
 
@@ -254,19 +260,25 @@ class KeyDropBot {
         await this.checkLogin();
 
         log('🔄 Iniciando loop de participación...', 'cyan');
-        log(`⏰ Participando cada ${CONFIG.WAIT_TIME / 1000} segundos`, 'cyan');
+        log(`⏰ Esperando ${CONFIG.WAIT_TIME / 1000} segundos después de cada participación exitosa`, 'cyan');
         log('   Presiona Ctrl+C para detener el bot', 'yellow');
         console.log('');
 
         // Loop infinito
         while (true) {
-            await this.participateInGiveaway();
+            const success = await this.participateInGiveaway();
 
-            const waitMinutes = Math.floor(CONFIG.WAIT_TIME / 60000);
-            const waitSeconds = Math.floor((CONFIG.WAIT_TIME % 60000) / 1000);
-            log(`⏳ Esperando ${waitMinutes}m ${waitSeconds}s hasta la próxima participación...`, 'yellow');
-
-            await this.page.waitForTimeout(CONFIG.WAIT_TIME);
+            if (success) {
+                // Solo esperar los 2 minutos si la participación fue exitosa
+                const waitMinutes = Math.floor(CONFIG.WAIT_TIME / 60000);
+                const waitSeconds = Math.floor((CONFIG.WAIT_TIME % 60000) / 1000);
+                log(`⏳ Esperando ${waitMinutes}m ${waitSeconds}s hasta la próxima participación...`, 'yellow');
+                await this.page.waitForTimeout(CONFIG.WAIT_TIME);
+            } else {
+                // Si no tuvo éxito, reintentar en 5 segundos
+                log('🔄 Reintentando en 5 segundos...', 'yellow');
+                await this.page.waitForTimeout(5000);
+            }
         }
     }
 
