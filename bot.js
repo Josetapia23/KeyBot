@@ -239,18 +239,63 @@ class KeyDropBot {
                 const joinButton = this.page.locator('[data-testid="btn-single-card-giveaway-join"]').first();
 
                 if (await joinButton.count() > 0) {
+                    // Verificar el texto del botón antes de hacer clic
+                    const buttonText = await joinButton.textContent();
+                    log(`🔍 Texto del botón: "${buttonText}"`, 'blue');
+
+                    // Verificar si ya está unido (el botón dice "ÚNETE DE NUEVO" o similar)
+                    if (buttonText && (buttonText.includes('DE NUEVO') || buttonText.includes('AGAIN'))) {
+                        log('⚠️  Ya participaste en este sorteo anteriormente', 'yellow');
+                        await this.page.goto(CONFIG.GIVEAWAY_URL);
+                        return false;
+                    }
+
                     log('✅ Botón "Unirse al sorteo" encontrado', 'green');
+                    log('🖱️  Haciendo clic en el botón...', 'cyan');
+
                     await joinButton.click({ force: true });
-                    this.participationCount++;
-                    log(`🎉 ¡Participación exitosa! Total: ${this.participationCount}`, 'green');
 
-                    await this.page.waitForTimeout(2000);
+                    // Esperar a que el botón cambie de texto (indicador de que se unió exitosamente)
+                    log('⏳ Esperando confirmación de participación...', 'yellow');
 
-                    // Volver a la lista de sorteos
-                    await this.page.goto(CONFIG.GIVEAWAY_URL);
-                    log('⬅️  Regresado a la lista de sorteos', 'blue');
+                    try {
+                        // Esperar hasta 10 segundos a que el botón cambie a "ÚNETE DE NUEVO"
+                        await this.page.waitForFunction(() => {
+                            const button = document.querySelector('[data-testid="btn-single-card-giveaway-join"]');
+                            if (!button) return false;
+                            const text = button.textContent || '';
+                            return text.includes('DE NUEVO') || text.includes('AGAIN');
+                        }, { timeout: 10000 });
 
-                    return true; // Retornar true cuando se une exitosamente
+                        log('✅ ¡Botón cambió a "ÚNETE DE NUEVO" - Participación confirmada!', 'green');
+                        this.participationCount++;
+                        log(`🎉 ¡Participación exitosa! Total: ${this.participationCount}`, 'green');
+
+                        // Esperar un poco más para que se procese completamente
+                        await this.page.waitForTimeout(3000);
+
+                        // Volver a la lista de sorteos
+                        await this.page.goto(CONFIG.GIVEAWAY_URL);
+                        log('⬅️  Regresado a la lista de sorteos', 'blue');
+
+                        return true; // Retornar true cuando se une exitosamente
+
+                    } catch (timeoutError) {
+                        log('⚠️  El botón no cambió - puede que ya estuvieras participando o hubo un error', 'yellow');
+
+                        // Tomar screenshot para debug
+                        try {
+                            const screenshotPath = path.join(__dirname, 'debug_after_click.png');
+                            await this.page.screenshot({ path: screenshotPath });
+                            log(`📸 Screenshot guardado en: ${screenshotPath}`, 'yellow');
+                        } catch (e) {
+                            // Ignorar error de screenshot
+                        }
+
+                        // Volver a la lista
+                        await this.page.goto(CONFIG.GIVEAWAY_URL);
+                        return false;
+                    }
                 } else {
                     log('⚠️  No se encontró el botón de participar', 'yellow');
                     // Volver a la lista
