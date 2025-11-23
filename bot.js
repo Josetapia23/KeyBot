@@ -184,12 +184,17 @@ class KeyDropBot {
             // Esperar a que cargue la página completamente
             await this.page.waitForTimeout(3000);
 
-            // Buscar el sorteo Amateur usando un selector más específico
-            // Buscamos la card completa que contiene "AMATEUR"
-            const amateurCard = this.page.locator('a[data-testid="btn-single-card-giveaway-join"]').filter({ has: this.page.locator('text=AMATEUR') });
+            // Debug: Ver qué elementos hay disponibles
+            const allCards = await this.page.locator('a[data-testid="btn-single-card-giveaway-join"]').count();
+            const allLinks = await this.page.locator('a[href*="/giveaways/"]').count();
+            log(`🔍 Debug: Encontrados ${allCards} cards con data-testid y ${allLinks} links de sorteos`, 'blue');
 
-            // Si no encuentra con ese selector, intentar con el link que contiene Amateur
-            const amateurLink = this.page.locator('a[href*="/giveaways/"]').filter({ hasText: 'AMATEUR' }).first();
+            // Buscar el sorteo Amateur usando un selector más específico
+            // Intentar con diferentes variantes de texto (mayúsculas/minúsculas)
+            const amateurCard = this.page.locator('a[data-testid="btn-single-card-giveaway-join"]').filter({ has: this.page.locator('text=/AMATEUR/i') });
+
+            // Si no encuentra con ese selector, intentar con el link que contiene Amateur (case insensitive)
+            const amateurLink = this.page.locator('a[href*="/giveaways/"]').filter({ hasText: /amateur/i }).first();
 
             let foundCard = false;
 
@@ -205,6 +210,16 @@ class KeyDropBot {
                 foundCard = true;
             } else {
                 log('❌ No se encontró el sorteo Amateur', 'red');
+
+                // Debug: Tomar screenshot para ver qué hay en la página
+                try {
+                    const screenshotPath = path.join(__dirname, 'debug_screenshot.png');
+                    await this.page.screenshot({ path: screenshotPath });
+                    log(`📸 Screenshot guardado en: ${screenshotPath}`, 'yellow');
+                } catch (e) {
+                    log('⚠️  No se pudo guardar screenshot', 'yellow');
+                }
+
                 return false; // Retornar false cuando no encuentra el sorteo
             }
 
