@@ -184,26 +184,50 @@ class KeyDropBot {
             // Esperar a que cargue la página completamente
             await this.page.waitForTimeout(3000);
 
-            // Enfoque simple: Buscar el texto "AMATEUR" y hacer clic en el botón de unirse más cercano
+            // Buscar el enlace del sorteo Amateur
             let foundCard = false;
 
             try {
-                // Primero verificar si existe el texto "AMATEUR" en la página
-                const amateurExists = await this.page.getByText(/amateur/i).count();
-                log(`🔍 Elementos con "Amateur" encontrados: ${amateurExists}`, 'blue');
+                // Buscar el enlace que contiene el texto "AMATEUR"
+                // Intentar varios selectores para encontrar el link correcto
+                log('🔍 Buscando enlace del sorteo Amateur...', 'blue');
 
-                if (amateurExists > 0) {
-                    // Buscar la card completa que contiene "AMATEUR GIVEAWAY"
-                    // Usamos un selector que busca el contenedor y luego el botón dentro de él
+                // Método 1: Buscar enlace con texto que contenga "AMATEUR"
+                const amateurLink = this.page.locator('a:has-text("AMATEUR")').first();
 
-                    // Método 1: Hacer clic directamente en el texto "AMATEUR GIVEAWAY"
-                    const amateurGiveaway = this.page.getByText(/amateur\s*giveaway/i).first();
+                if (await amateurLink.count() > 0) {
+                    log('✅ Encontrado enlace de sorteo "AMATEUR"', 'green');
 
-                    if (await amateurGiveaway.count() > 0) {
-                        log('✅ Encontrado "AMATEUR GIVEAWAY"', 'green');
-                        // Hacer clic en el texto para ir a la página del sorteo
-                        await amateurGiveaway.click({ force: true });
-                        foundCard = true;
+                    // Obtener la URL del enlace antes de hacer clic
+                    const href = await amateurLink.getAttribute('href');
+                    log(`🔗 URL del sorteo: ${href}`, 'blue');
+
+                    // Hacer clic en el enlace
+                    await amateurLink.click({ force: true });
+                    foundCard = true;
+
+                    // Esperar a que navegue
+                    await this.page.waitForLoadState('domcontentloaded');
+                } else {
+                    log('⚠️  No se encontró enlace con texto "AMATEUR"', 'yellow');
+
+                    // Método 2: Buscar por atributo href que contenga un ID específico
+                    // o cualquier enlace en la sección de giveaways
+                    const allGiveawayLinks = await this.page.locator('a[href*="/giveaways/"]').all();
+                    log(`🔍 Enlaces de giveaways encontrados: ${allGiveawayLinks.length}`, 'blue');
+
+                    // Buscar el que contenga "AMATEUR" en su texto
+                    for (const link of allGiveawayLinks) {
+                        const text = await link.textContent();
+                        if (text && text.toUpperCase().includes('AMATEUR')) {
+                            log(`✅ Encontrado enlace Amateur: "${text.trim()}"`, 'green');
+                            const href = await link.getAttribute('href');
+                            log(`🔗 URL del sorteo: ${href}`, 'blue');
+                            await link.click({ force: true });
+                            foundCard = true;
+                            await this.page.waitForLoadState('domcontentloaded');
+                            break;
+                        }
                     }
                 }
 
